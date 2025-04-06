@@ -15,7 +15,9 @@
  */
 package io.yupiik.fusion.documentation;
 
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -26,8 +28,10 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.DynamicTest.dynamicTest;
 
 class DocumentationGeneratorTest {
     private static final String DOC_CONTENT = """
@@ -54,35 +58,12 @@ class DocumentationGeneratorTest {
                ]
             }""";
 
-    @Test
-    void genericMavenModuleNameLookup(@TempDir final Path work) throws IOException {
-        final var localRepo = Files.createDirectories(work.resolve("target/project-local-repo/com.foo-with-iphen/artifact/0.0.1-SNAPSHOT"));
-        final var jarFile = localRepo.resolve("artifact-0.0.1-SNAPSHOT.jar");
-        try (final var jar = new JarOutputStream(Files.newOutputStream(jarFile))) {
-            jar.putNextEntry(new JarEntry("META-INF/"));
-            jar.closeEntry();
-            jar.putNextEntry(new JarEntry("META-INF/fusion/"));
-            jar.closeEntry();
-            jar.putNextEntry(new JarEntry("META-INF/fusion/configuration/"));
-            jar.closeEntry();
-            jar.putNextEntry(new JarEntry("META-INF/fusion/configuration/documentation.json"));
-            jar.write(DOC_CONTENT.getBytes(StandardCharsets.UTF_8));
-            jar.closeEntry();
-        }
-
-        final var base = Files.createDirectories(work.resolve("base"));
-        new DocumentationGenerator(base, Map.of(
-                "urls", "jar:" + jarFile.toUri().toURL().toExternalForm() + "!/META-INF/fusion/configuration/documentation.json",
-                "includeEnvironmentNames", "true"))
-                .run();
-        assertEquals("""
-                = artifact
-                
-                == Configuration
-                
-                * `jwt.algo` (`JWT_ALGO`) (default: `"RS256"`): JWT `alg` value.
-                * `jwt.expRequired` (`JWT_EXPREQUIRED`) (default: `true`): Are `exp` (expiry) validation required of can it be skipped if claim is missing.""",
-                Files.readString(base.resolve("content/_partials/generated/documentation.artifact.adoc")));
+    @TestFactory
+    Stream<DynamicTest> genericMavenModuleNameLookup(@TempDir final Path work) {
+        return Stream.of(
+                dynamicTest("genericMavenModuleNameLookup_finalVersion", () -> assertModuleNameExtraction(work, "")),
+                dynamicTest("genericMavenModuleNameLookup_snapshot", () -> assertModuleNameExtraction(work, "-SNAPSHOT"))
+        );
     }
 
     @Test
@@ -150,6 +131,36 @@ class DocumentationGeneratorTest {
                 `jwt.expRequired` (env: `JWT_EXPREQUIRED`)::
                 Are `exp` (expiry) validation required of can it be skipped if claim is missing. Default: `true`.
                 """, Files.readString(output));
+    }
+
+    private void assertModuleNameExtraction(final Path work, final String versionSuffix) throws IOException {
+        final var localRepo = Files.createDirectories(work.resolve("target/project-local-repo/com.foo-with-iphen/artifact-with-iphen/0.0.1" + versionSuffix));
+        final var jarFile = localRepo.resolve("artifact-with-iphen-0.0.1"+versionSuffix+".jar");
+        try (final var jar = new JarOutputStream(Files.newOutputStream(jarFile))) {
+            jar.putNextEntry(new JarEntry("META-INF/"));
+            jar.closeEntry();
+            jar.putNextEntry(new JarEntry("META-INF/fusion/"));
+            jar.closeEntry();
+            jar.putNextEntry(new JarEntry("META-INF/fusion/configuration/"));
+            jar.closeEntry();
+            jar.putNextEntry(new JarEntry("META-INF/fusion/configuration/documentation.json"));
+            jar.write(DOC_CONTENT.getBytes(StandardCharsets.UTF_8));
+            jar.closeEntry();
+        }
+
+        final var base = Files.createDirectories(work.resolve("base"));
+        new DocumentationGenerator(base, Map.of(
+                "urls", "jar:" + jarFile.toUri().toURL().toExternalForm() + "!/META-INF/fusion/configuration/documentation.json",
+                "includeEnvironmentNames", "true"))
+                .run();
+        assertEquals("""
+                = artifact-with-iphen
+                
+                == Configuration
+                
+                * `jwt.algo` (`JWT_ALGO`) (default: `"RS256"`): JWT `alg` value.
+                * `jwt.expRequired` (`JWT_EXPREQUIRED`) (default: `true`): Are `exp` (expiry) validation required of can it be skipped if claim is missing.""",
+                Files.readString(base.resolve("content/_partials/generated/documentation.artifact-with-iphen.adoc")));
     }
 
     private URL writeConf(final Path work) throws IOException {

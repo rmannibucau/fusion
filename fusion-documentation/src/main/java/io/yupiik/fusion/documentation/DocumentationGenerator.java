@@ -71,9 +71,16 @@ public class DocumentationGenerator implements Runnable {
                                     // assume this form:
                                     // jar:file:/path/to/project/target/project-local-repo/group.id/artifact/version/group-version.jar!/META-INF/fusion/configuration/documentation.json
                                     if (url.getFile().endsWith("!/META-INF/fusion/configuration/documentation.json")) {
-                                        final var versionSep = fileRef.indexOf('-');
+                                        var versionSep = fileRef.lastIndexOf('-'); // assume version doesn't have one
                                         if (versionSep > 0) {
-                                            return fileRef.substring(0, versionSep);
+                                            if (fileRef.substring(versionSep).equals("-SNAPSHOT.jar")) {
+                                                versionSep = fileRef.lastIndexOf('-', versionSep-1);
+                                                if (versionSep > 0) {
+                                                    return fileRef.substring(0, versionSep);
+                                                }
+                                            } else {
+                                                return fileRef.substring(0, versionSep);
+                                            }
                                         }
                                         if (fileRef.endsWith(".jar")) {
                                             return fileRef.substring(0, fileRef.length() - ".jar".length());
